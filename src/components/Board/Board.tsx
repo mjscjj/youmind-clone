@@ -1,14 +1,20 @@
-import { useMemo, useState } from 'react'
-import { Search, LayoutGrid, List, FileText, Link, Upload } from 'lucide-react'
+import { useMemo, useState, useRef } from 'react'
+import { Search, LayoutGrid, FileText, Link, Upload, Loader2, AlertCircle, File, GitBranch } from 'lucide-react'
 import { useBoardStore } from '../../lib/store'
+import { fileAPI } from '../../lib/api'
 import type { Content } from '../../lib/api'
+import MindMapPanel from './MindMapPanel'
+
+type ViewMode = 'grid' | 'mindmap'
 
 interface BoardHeaderProps {
   boardName: string
   onSearch: (q: string) => void
+  viewMode: ViewMode
+  onViewModeChange: (mode: ViewMode) => void
 }
 
-function BoardHeader({ boardName, onSearch }: BoardHeaderProps) {
+function BoardHeader({ boardName, onSearch, viewMode, onViewModeChange }: BoardHeaderProps) {
   return (
     <div className="h-12 flex items-center justify-between px-5 border-b border-white/5">
       <h1 className="text-[15px] font-medium text-white">{boardName}</h1>
@@ -27,11 +33,19 @@ function BoardHeader({ boardName, onSearch }: BoardHeaderProps) {
         
         {/* View Toggle */}
         <div className="flex items-center gap-1 bg-white/5 rounded-md p-0.5">
-          <button className="p-1.5 rounded bg-white/10 text-white">
+          <button 
+            onClick={() => onViewModeChange('grid')}
+            className={`p-1.5 rounded transition-colors ${viewMode === 'grid' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/70'}`}
+            title="网格视图"
+          >
             <LayoutGrid size={14} />
           </button>
-          <button className="p-1.5 rounded text-white/40 hover:text-white/70">
-            <List size={14} />
+          <button 
+            onClick={() => onViewModeChange('mindmap')}
+            className={`p-1.5 rounded transition-colors ${viewMode === 'mindmap' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/70'}`}
+            title="思维导图视图"
+          >
+            <GitBranch size={14} />
           </button>
         </div>
       </div>
@@ -58,7 +72,12 @@ function EmptyState() {
   )
 }
 
-function AddButtons({ onAdd }: { onAdd: (type: 'note' | 'link' | 'file') => void }) {
+interface AddButtonsProps {
+  onAdd: (type: 'note' | 'link' | 'file') => void
+  isUploading: boolean
+}
+
+function AddButtons({ onAdd, isUploading }: AddButtonsProps) {
   return (
     <div className="flex items-center justify-center gap-2.5 pb-6">
       <button onClick={() => onAdd('note')} className="flex items-center gap-2 px-3.5 py-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-md text-[13px] text-white/60 transition-all">
@@ -69,22 +88,47 @@ function AddButtons({ onAdd }: { onAdd: (type: 'note' | 'link' | 'file') => void
         <Link size={14} />
         <span>添加链接</span>
       </button>
-      <button onClick={() => onAdd('file')} className="flex items-center gap-2 px-3.5 py-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-md text-[13px] text-white/60 transition-all">
-        <Upload size={14} />
-        <span>添加文件</span>
+      <button 
+        onClick={() => onAdd('file')} 
+        disabled={isUploading}
+        className="flex items-center gap-2 px-3.5 py-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-md text-[13px] text-white/60 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {isUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+        <span>{isUploading ? '上传中...' : '添加文件'}</span>
       </button>
     </div>
   )
 }
 
 function ContentCard({ item }: { item: Content }) {
+  const isFile = item.type === 'file'
+  
   return (
     <div className="bg-white/5 border border-white/10 rounded-lg p-3 hover:border-white/20 transition">
-      <div className="text-[13px] text-white/80 font-medium mb-1 truncate">{item.title}</div>
-      <div className="text-[12px] text-white/40 line-clamp-3 whitespace-pre-wrap">{item.content}</div>
+      <div className="flex items-start gap-2">
+        {isFile && <File size={14} className="text-white/40 mt-0.5 flex-shrink-0" />}
+        <div className="flex-1 min-w-0">
+          <div className="text-[13px] text-white/80 font-medium mb-1 truncate">{item.title}</div>
+          <div className="text-[12px] text-white/40 line-clamp-3 whitespace-pre-wrap">{item.content}</div>
+          {isFile && item.fileSize && (
+            <div className="mt-1 text-[10px] text-white/30">
+              {formatFileSize(item.fileSize)}
+            </div>
+          )}
+        </div>
+      </div>
       <div className="mt-2 text-[10px] text-white/30 uppercase">{item.type}</div>
     </div>
   )
+}
+
+// Helper function to format file size
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return '0 Bytes'
+  const k = 1024
+  const sizes = ['Bytes', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
 interface BoardProps {
@@ -93,6 +137,11 @@ interface BoardProps {
 
 export default function Board({ boardId }: BoardProps) {
   const [query, setQuery] = useState('')
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<ViewMode>('grid')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  
   const boards = useBoardStore((s) => s.boards)
   const contents = useBoardStore((s) => s.contents[boardId] || [])
   const addContent = useBoardStore((s) => s.addContent)
@@ -106,10 +155,64 @@ export default function Board({ boardId }: BoardProps) {
     return contents.filter(c => c.title.toLowerCase().includes(q) || c.content.toLowerCase().includes(q))
   }, [query, contents])
 
+  // File upload handler
+  const onFileUpload = async (file: File) => {
+    setIsUploading(true)
+    setUploadError(null)
+    
+    try {
+      // Use the centralized fileAPI for upload
+      const result = await fileAPI.upload(boardId, file)
+      
+      // Create content entry with file details from server response
+      const id = `${Date.now()}`
+      const newContent: Content = {
+        id,
+        boardId,
+        title: result.title || file.name,
+        content: result.content || `文件: ${file.name}`,
+        type: 'file',
+        filePath: result.filePath,
+        fileSize: result.fileSize || file.size,
+        mimeType: result.mimeType || file.type,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+      
+      addContent(boardId, newContent)
+      
+    } catch (error) {
+      console.error('File upload error:', error)
+      const errorMessage = error instanceof Error ? error.message : '上传失败，请重试'
+      setUploadError(errorMessage)
+      
+      // Auto-clear error after 5 seconds
+      setTimeout(() => setUploadError(null), 5000)
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  // Handle file input change
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      onFileUpload(file)
+    }
+    // Reset input so same file can be uploaded again
+    event.target.value = ''
+  }
+
   const handleAdd = (type: 'note' | 'link' | 'file') => {
+    if (type === 'file') {
+      // Trigger file input click
+      fileInputRef.current?.click()
+      return
+    }
+    
     const id = `${Date.now()}`
-    const title = type === 'note' ? '新笔记' : type === 'link' ? '新链接' : '新文件'
-    const content = type === 'note' ? '在这里写下你的想法…' : type === 'link' ? 'https://example.com' : '文件已添加（示例）'
+    const title = type === 'note' ? '新笔记' : '新链接'
+    const content = type === 'note' ? '在这里写下你的想法…' : 'https://example.com'
     addContent(boardId, {
       id,
       boardId,
@@ -121,17 +224,52 @@ export default function Board({ boardId }: BoardProps) {
     })
   }
 
+  // MindMap view - render MindMapPanel instead
+  if (viewMode === 'mindmap') {
+    return (
+      <MindMapPanel boardId={boardId} boardTitle={boardName} onViewModeChange={setViewMode} />
+    )
+  }
+  
   return (
     <div className="flex-1 flex flex-col min-w-0 bg-[#0a0a0a]">
-      <BoardHeader boardName={boardName} onSearch={setQuery} />
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        onChange={handleFileChange}
+        className="hidden"
+        accept="*/*"
+      />
+      
+      <BoardHeader boardName={boardName} onSearch={setQuery} viewMode={viewMode} onViewModeChange={setViewMode} />
+      
+      {/* Upload error message */}
+      {uploadError && (
+        <div className="mx-5 mt-3 flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-md text-[13px] text-red-400">
+          <AlertCircle size={14} />
+          <span>{uploadError}</span>
+        </div>
+      )}
+      
       {filtered.length === 0 ? (
         <>
           <EmptyState />
-          <AddButtons onAdd={handleAdd} />
+          <AddButtons onAdd={handleAdd} isUploading={isUploading} />
         </>
       ) : (
         <div className="p-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map(item => <ContentCard key={item.id} item={item} />)}
+        </div>
+      )}
+      
+      {/* Upload overlay spinner */}
+      {isUploading && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-[#1a1a1a] border border-white/10 rounded-lg p-6 flex flex-col items-center gap-3">
+            <Loader2 size={32} className="animate-spin text-white/60" />
+            <span className="text-white/70 text-sm">正在上传文件...</span>
+          </div>
         </div>
       )}
     </div>
