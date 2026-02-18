@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Sparkles, Send, Mic, ChevronDown, MoreHorizontal } from 'lucide-react'
-import { useBoardStore, type Message } from '../../lib/store'
+import { useBoardStore } from '../../lib/store'
+import type { Message } from '../../lib/types'
 
 // Simple ID generator fallback
 const generateId = () => {
@@ -36,34 +37,40 @@ function ChatMessage({ message }: { message: Message }) {
               onClick={() => setShowThinking(!showThinking)}
               className="flex items-center gap-1 text-[11px] text-white/30 hover:text-white/50 transition-colors"
             >
-              <span>思考了 {message.thinkingTime} 秒</span>
+              <span>{message.thinkingTime ? `思考了 ${message.thinkingTime.toFixed(1)} 秒` : '思考中...'}</span>
               <ChevronDown size={10} className={`transform transition-transform ${showThinking ? 'rotate-180' : ''}`} />
             </button>
           )}
         </div>
         
         {showThinking && message.thinking && (
-          <div className="mb-2.5 p-2.5 bg-white/5 rounded-lg border border-white/10 text-[12px] text-white/40 leading-relaxed">
+          <div className="mb-2.5 p-2.5 bg-white/5 rounded-lg border border-white/10 text-[12px] text-white/40 leading-relaxed whitespace-pre-wrap">
             {message.thinking}
           </div>
         )}
         
-        <div className="text-[13px] text-white/70 leading-relaxed whitespace-pre-wrap">
-          {message.content}
-        </div>
+        {message.content ? (
+          <div className="text-[13px] text-white/70 leading-relaxed whitespace-pre-wrap">
+            {message.content}
+          </div>
+        ) : (
+          <div className="text-[13px] text-white/30 italic">
+            正在生成回答...
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
-function ChatInput({ onSend }: { onSend: (text: string) => void }) {
+function ChatInput({ onSend, disabled }: { onSend: (text: string) => void, disabled?: boolean }) {
   const [input, setInput] = useState('')
   const [showSkills, setShowSkills] = useState(false)
 
   return (
     <div className="border-t border-white/5 p-4">
       <div className="relative">
-        <div className="flex items-end gap-2 bg-white/5 border border-white/10 rounded-xl p-2.5 focus-within:border-white/20 transition-colors">
+        <div className={`flex items-end gap-2 bg-white/5 border border-white/10 rounded-xl p-2.5 focus-within:border-white/20 transition-colors ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
           {/* Skill Button */}
           <button 
             onClick={() => setShowSkills(!showSkills)}
@@ -80,15 +87,16 @@ function ChatInput({ onSend }: { onSend: (text: string) => void }) {
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault()
-                if (input.trim()) {
+                if (input.trim() && !disabled) {
                   onSend(input)
                   setInput('')
                 }
               }
             }}
-            placeholder="描述任务或输入 / 使用技能"
+            placeholder={disabled ? "正在思考..." : "描述任务或输入 / 使用技能"}
             className="flex-1 bg-transparent text-[13px] text-white/70 placeholder:text-white/30 resize-none outline-none py-1 min-h-[20px] max-h-[100px] leading-relaxed"
             rows={1}
+            disabled={disabled}
             onInput={(e) => {
               const target = e.target as HTMLTextAreaElement
               target.style.height = 'auto'
@@ -103,12 +111,12 @@ function ChatInput({ onSend }: { onSend: (text: string) => void }) {
             </button>
             <button
               onClick={() => {
-                if (input.trim()) {
+                if (input.trim() && !disabled) {
                   onSend(input)
                   setInput('')
                 }
               }}
-              disabled={!input.trim()}
+              disabled={!input.trim() || disabled}
               className="p-2 bg-gradient-to-r from-[#6366f1] to-[#8b5cf6] hover:from-[#4f46e5] hover:to-[#7c3aed] disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-all shadow-md"
             >
               <Send size={14} />
@@ -118,7 +126,7 @@ function ChatInput({ onSend }: { onSend: (text: string) => void }) {
         
         {/* Skills Dropdown */}
         {showSkills && (
-          <div className="absolute bottom-full left-0 mb-2 w-64 bg-[#141414] border border-white/10 rounded-xl shadow-2xl overflow-hidden">
+          <div className="absolute bottom-full left-0 mb-2 w-64 bg-[#141414] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
             <div className="px-3 py-2 text-[11px] text-white/30 border-b border-white/5">可用技能</div>
             <button className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 transition-colors text-left">
               <Sparkles size={14} className="text-[#6366f1]" />
@@ -138,8 +146,8 @@ function ChatInput({ onSend }: { onSend: (text: string) => void }) {
         )}
       </div>
       
-      <div className="mt-2.5 text-[11px] text-white/30 text-center">
-        AI 助手可能会生成不准确的信息，请验证重要信息。
+      <div className={`mt-2.5 text-[11px] text-white/30 text-center transition-opacity ${isGenerating ? 'opacity-100' : 'opacity-0'}`}>
+        正在生成回答 (openai/o3-mini)...
       </div>
     </div>
   )
@@ -149,6 +157,9 @@ export default function ChatPanel() {
   const selectedBoardId = useBoardStore((state) => state.selectedBoardId)
   const messagesMap = useBoardStore((state) => state.messages)
   const addMessage = useBoardStore((state) => state.addMessage)
+  const updateMessage = useBoardStore((state) => state.updateMessage)
+  
+  const [isGenerating, setIsGenerating] = useState(false)
   
   const messages = selectedBoardId ? (messagesMap[selectedBoardId] || []) : []
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -159,48 +170,159 @@ export default function ChatPanel() {
 
   useEffect(() => {
     scrollToBottom()
-  }, [messages])
+  }, [messages, isGenerating])
 
   const handleSendMessage = async (text: string) => {
-    if (!selectedBoardId) return
+    if (!selectedBoardId || isGenerating) return
 
-    // Add user message
+    // 1. Add user message
     const userMessage: Message = {
       id: generateId(),
       role: 'user',
       content: text,
       timestamp: Date.now()
     }
+    // We update local state via store immediately
     addMessage(selectedBoardId, userMessage)
+    
+    // 2. Prepare Context from Store
+    const state = useBoardStore.getState();
+    const currentMessages = state.messages[selectedBoardId] || []; // Get fresh messages including the one just added
+    
+    const boardContents = state.contents[selectedBoardId] || [];
+    const boardTitle = state.boards.find(b => b.id === selectedBoardId)?.title || 'Current Board';
 
-    // Simulate AI thinking and response
-    setTimeout(() => {
-      const state = useBoardStore.getState();
-      const boardContents = state.contents[selectedBoardId] || [];
-      const boardTitle = state.boards.find(b => b.id === selectedBoardId)?.title || 'Current Board';
+    const systemPrompt = `You are "YouMind Assistant", an intelligent research partner.
+Context: "${boardTitle}"
+Resources:
+${boardContents.length > 0 
+  ? boardContents.map(c => `- [${c.type.toUpperCase()}] ${c.title}: ${c.content.substring(0, 300)}...`).join('\n') 
+  : "No specific resources in this board yet."}
 
-      let replyContent = `对于 "${text}"，我结合看板 "${boardTitle}" 的内容进行了分析。`;
+Instructions:
+- Answer concisely using Markdown.
+- Base your answers on the provided context if relevant.
+- Be helpful, neutral, and professional.
+`;
+
+    // Construct message history for API
+    const apiMessages = [
+      { role: 'system', content: systemPrompt },
+      ...currentMessages.map(m => ({ 
+        role: m.role, 
+        content: m.content || "" // Handle empty content if any
+      }))
+    ];
+
+    // 3. Create Placeholder for Assistant Message
+    const assistantId = generateId();
+    const assistantMessage: Message = {
+      id: assistantId,
+      role: 'assistant',
+      content: '', 
+      thinking: 'Connecting to OpenRouter...',
+      thinkingTime: 0,
+      timestamp: Date.now()
+    };
+    addMessage(selectedBoardId, assistantMessage);
+    setIsGenerating(true);
+
+    const startTime = Date.now();
+    let accumulatedContent = '';
+
+    try {
+      const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
+      if (!apiKey) {
+        throw new Error('API Key Missing: VITE_OPENROUTER_API_KEY');
+      }
+
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': window.location.origin, // Dynamic origin
+          'X-Title': 'YouMind',
+        },
+        body: JSON.stringify({
+          model: 'openai/o3-mini', 
+          messages: apiMessages,
+          stream: true, 
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`API Error ${response.status}: ${errorText}`);
+      }
       
-      if (boardContents.length > 0) {
-        const extractedContext = boardContents.map(c => c.title).join('、');
-        replyContent += `\n\n基于上下文（${extractedContext}），建议进一步整合相关观点。`;
+      if (!response.body) throw new Error('No response body');
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let done = false;
+      let buffer = '';
+
+      // Clear thinking message once we start receiving data
+      updateMessage(selectedBoardId, assistantId, { 
+        thinking: 'Generating response...' 
+      });
+
+      while (!done) {
+        const { value, done: readerDone } = await reader.read();
+        done = readerDone;
         
-        // Sources Block
-        replyContent += `\n\n**Sources:**\n${boardContents.map(c => `- ${c.title}`).join('\n')}`;
-      } else {
-        replyContent += `\n\n当前看板暂无资料，建议先收集相关素材。`;
+        if (value) {
+          const chunk = decoder.decode(value, { stream: true });
+          buffer += chunk;
+          
+          const lines = buffer.split('\n');
+          // Keep the last line in buffer if it's incomplete
+          buffer = lines.pop() || '';
+          
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed.startsWith('data: ')) {
+               const dataStr = trimmed.slice(6);
+               if (dataStr === '[DONE]') continue;
+               
+               try {
+                 const json = JSON.parse(dataStr);
+                 const delta = json.choices[0]?.delta?.content || '';
+                 if (delta) {
+                   accumulatedContent += delta;
+                   // Update store with current accumulation
+                   // Note: Doing this every chunk might be heavy, but React handles it okay usually.
+                   updateMessage(selectedBoardId, assistantId, { 
+                     content: accumulatedContent,
+                     thinking: undefined
+                   });
+                 }
+               } catch (e) {
+                 // Ignore parse errors for partial lines (though we try to avoid them with buffer)
+               }
+            }
+          }
+        }
       }
 
-      const aiMessage: Message = {
-        id: generateId(),
-        role: 'assistant',
-        content: replyContent,
-        thinking: `已检索到 ${boardContents.length} 条相关资料，正在生成回答...`,
-        thinkingTime: 1.5,
-        timestamp: Date.now()
-      }
-      addMessage(selectedBoardId, aiMessage)
-    }, 1500)
+      // Final update
+      const endTime = Date.now();
+      updateMessage(selectedBoardId, assistantId, {
+        content: accumulatedContent,
+        thinkingTime: (endTime - startTime) / 1000,
+        thinking: undefined
+      });
+
+    } catch (error: any) {
+      console.error('Chat Error:', error);
+      updateMessage(selectedBoardId, assistantId, {
+        content: `**Error:** ${error.message || 'Failed to generate response'}.`,
+        thinking: undefined
+      });
+    } finally {
+      setIsGenerating(false);
+    }
   }
 
   return (
@@ -213,7 +335,9 @@ export default function ChatPanel() {
           </div>
           <div>
             <h3 className="text-[13px] font-medium text-white/80">深度研究助手</h3>
-            <p className="text-[11px] text-white/40">随时为你提供研究支持</p>
+            <p className="text-[11px] text-white/40">
+              {isGenerating ? 'Generating...' : 'Ready'}
+            </p>
           </div>
         </div>
         <button className="p-2 text-white/30 hover:text-white/60 hover:bg-white/5 rounded-lg transition-colors">
@@ -227,6 +351,7 @@ export default function ChatPanel() {
           <div className="flex flex-col items-center justify-center h-full text-white/30 text-[13px]">
             <Sparkles size={24} className="mb-2 opacity-50" />
             <p>开始一个新的对话...</p>
+            <p className="text-[10px] mt-2 opacity-50">Powered by OpenRouter</p>
           </div>
         ) : (
           messages.map((message) => (
@@ -237,7 +362,7 @@ export default function ChatPanel() {
       </div>
 
       {/* Input */}
-      <ChatInput onSend={handleSendMessage} />
+      <ChatInput onSend={handleSendMessage} disabled={isGenerating} />
     </aside>
   )
 }

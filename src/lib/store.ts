@@ -35,6 +35,7 @@ export interface BoardState {
   removeContent: (boardId: string, id: string) => void
 
   addMessage: (boardId: string, message: Message) => void
+  updateMessage: (boardId: string, messageId: string, updates: Partial<Message>) => void
 
   setSearchQuery: (q: string) => void
   setSearchResults: (results: Content[]) => void
@@ -55,7 +56,7 @@ export interface BoardState {
 
 export const useBoardStore = create<BoardState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       boards: [
         { id: '1', title: '深度研究', description: '研究与分析', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
         { id: '2', title: '我的资料', description: '素材与引用', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
@@ -112,6 +113,12 @@ export const useBoardStore = create<BoardState>()(
       addMessage: (boardId, message) => set((state: BoardState) => {
         const currentMessages = state.messages?.[boardId] || []
         return { messages: { ...state.messages, [boardId]: [...currentMessages, message] } }
+      }),
+
+      updateMessage: (boardId, messageId, updates) => set((state: BoardState) => {
+        const currentMessages = state.messages?.[boardId] || []
+        const updatedMessages = currentMessages.map(m => m.id === messageId ? { ...m, ...updates } : m)
+        return { messages: { ...state.messages, [boardId]: updatedMessages } }
       }),
 
       setSearchQuery: (q) => set({ searchQuery: q }),
