@@ -175,11 +175,27 @@ export default function ChatPanel() {
 
     // Simulate AI thinking and response
     setTimeout(() => {
+      const state = useBoardStore.getState();
+      const boardContents = state.contents[selectedBoardId] || [];
+      const boardTitle = state.boards.find(b => b.id === selectedBoardId)?.title || 'Current Board';
+
+      let replyContent = `对于 "${text}"，我结合看板 "${boardTitle}" 的内容进行了分析。`;
+      
+      if (boardContents.length > 0) {
+        const extractedContext = boardContents.map(c => c.title).join('、');
+        replyContent += `\n\n基于上下文（${extractedContext}），建议进一步整合相关观点。`;
+        
+        // Sources Block
+        replyContent += `\n\n**Sources:**\n${boardContents.map(c => `- ${c.title}`).join('\n')}`;
+      } else {
+        replyContent += `\n\n当前看板暂无资料，建议先收集相关素材。`;
+      }
+
       const aiMessage: Message = {
         id: generateId(),
         role: 'assistant',
-        content: `我收到了关于 "${text}" 的请求。这是基于当前 "${selectedBoardId}" 看板的模拟回复。\n\n在实际系统中，这里将接入真实的 AI 模型，结合看板上下文进行深度回复。`,
-        thinking: '正在分析用户请求并结合当前看板上下文...',
+        content: replyContent,
+        thinking: `已检索到 ${boardContents.length} 条相关资料，正在生成回答...`,
         thinkingTime: 1.5,
         timestamp: Date.now()
       }

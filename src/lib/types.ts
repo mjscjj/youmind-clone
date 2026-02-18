@@ -60,3 +60,12 @@ export interface Skill {
   icon: string; // lucide icon name
   category: 'research' | 'writing' | 'coding' | 'productivity';
 }
+
+export interface Message {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: number;
+  thinking?: string;
+  thinkingTime?: number;
+}

@@ -1,11 +1,12 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import type { Board, Content, Skill } from './types'
+import type { Board, Content, Skill, Message } from './types'
 
 export interface BoardState {
   boards: Board[]
   selectedBoardId: string | null
   contents: Record<string, Content[]> // boardId -> contents
+  messages: Record<string, Message[]> // boardId -> messages
   searchQuery: string
   searchResults: Content[]
   
@@ -32,6 +33,8 @@ export interface BoardState {
   addContent: (boardId: string, item: Content) => void
   updateContent: (boardId: string, item: Content) => void
   removeContent: (boardId: string, id: string) => void
+
+  addMessage: (boardId: string, message: Message) => void
 
   setSearchQuery: (q: string) => void
   setSearchResults: (results: Content[]) => void
@@ -60,6 +63,11 @@ export const useBoardStore = create<BoardState>()(
       ],
       selectedBoardId: '1',
       contents: {
+        '1': [],
+        '2': [],
+        '3': [],
+      },
+      messages: {
         '1': [],
         '2': [],
         '3': [],
@@ -99,6 +107,11 @@ export const useBoardStore = create<BoardState>()(
       removeContent: (boardId, id) => set((state: BoardState) => {
         const filteredItems = (state.contents[boardId] || []).filter(c => c.id !== id)
         return { contents: { ...state.contents, [boardId]: filteredItems } }
+      }),
+
+      addMessage: (boardId, message) => set((state: BoardState) => {
+        const currentMessages = state.messages?.[boardId] || []
+        return { messages: { ...state.messages, [boardId]: [...currentMessages, message] } }
       }),
 
       setSearchQuery: (q) => set({ searchQuery: q }),
