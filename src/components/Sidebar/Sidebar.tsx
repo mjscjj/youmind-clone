@@ -1,4 +1,5 @@
 import { Layout, FolderOpen, Lightbulb, Plus, User, Settings, Search } from 'lucide-react'
+import { useBoardStore } from '../../lib/store'
 
 interface SidebarItemProps {
   icon: React.ReactNode
@@ -28,13 +29,9 @@ interface SidebarProps {
   onSelectBoard: (board: string) => void
 }
 
-const boards = [
-  { id: 'research', name: '深度研究', icon: <Layout size={14} /> },
-  { id: 'materials', name: '我的资料', icon: <FolderOpen size={14} /> },
-  { id: 'inspiration', name: '灵感收集', icon: <Lightbulb size={14} /> },
-]
-
 export default function Sidebar({ selectedBoard, onSelectBoard }: SidebarProps) {
+  const boards = useBoardStore((s) => s.boards)
+
   return (
     <aside className="w-[240px] h-full bg-[#0a0a0a] border-r border-white/5 flex flex-col">
       {/* Logo */}
@@ -67,10 +64,10 @@ export default function Sidebar({ selectedBoard, onSelectBoard }: SidebarProps) 
         {boards.map((board) => (
           <SidebarItem
             key={board.id}
-            icon={board.icon}
-            label={board.name}
-            active={selectedBoard === board.name}
-            onClick={() => onSelectBoard(board.name)}
+            icon={board.id === 'research' ? <Layout size={14} /> : board.id === 'materials' ? <FolderOpen size={14} /> : <Lightbulb size={14} />}
+            label={board.title}
+            active={selectedBoard === board.id}
+            onClick={() => onSelectBoard(board.id)}
           />
         ))}
       </div>

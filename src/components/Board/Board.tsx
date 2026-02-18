@@ -1,10 +1,14 @@
-import { Search, LayoutGrid, List, FileText, Link, Upload, Sparkles } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Search, LayoutGrid, List, FileText, Link, Upload } from 'lucide-react'
+import { useBoardStore } from '../../lib/store'
+import type { Content } from '../../lib/api'
 
 interface BoardHeaderProps {
   boardName: string
+  onSearch: (q: string) => void
 }
 
-function BoardHeader({ boardName }: BoardHeaderProps) {
+function BoardHeader({ boardName, onSearch }: BoardHeaderProps) {
   return (
     <div className="h-12 flex items-center justify-between px-5 border-b border-white/5">
       <h1 className="text-[15px] font-medium text-white">{boardName}</h1>
@@ -16,6 +20,7 @@ function BoardHeader({ boardName }: BoardHeaderProps) {
           <input
             type="text"
             placeholder="搜索资料..."
+            onChange={(e) => onSearch(e.target.value)}
             className="w-56 bg-white/5 border border-white/10 rounded-md pl-8 pr-3 py-1.5 text-[13px] text-white/70 placeholder:text-white/30 focus:border-white/20 focus:outline-none transition-colors"
           />
         </div>
@@ -53,18 +58,18 @@ function EmptyState() {
   )
 }
 
-function AddButtons() {
+function AddButtons({ onAdd }: { onAdd: (type: 'note' | 'link' | 'file') => void }) {
   return (
     <div className="flex items-center justify-center gap-2.5 pb-6">
-      <button className="flex items-center gap-2 px-3.5 py-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-md text-[13px] text-white/60 transition-all">
+      <button onClick={() => onAdd('note')} className="flex items-center gap-2 px-3.5 py-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-md text-[13px] text-white/60 transition-all">
         <FileText size={14} />
         <span>新建笔记</span>
       </button>
-      <button className="flex items-center gap-2 px-3.5 py-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-md text-[13px] text-white/60 transition-all">
+      <button onClick={() => onAdd('link')} className="flex items-center gap-2 px-3.5 py-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-md text-[13px] text-white/60 transition-all">
         <Link size={14} />
         <span>添加链接</span>
       </button>
-      <button className="flex items-center gap-2 px-3.5 py-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-md text-[13px] text-white/60 transition-all">
+      <button onClick={() => onAdd('file')} className="flex items-center gap-2 px-3.5 py-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-md text-[13px] text-white/60 transition-all">
         <Upload size={14} />
         <span>添加文件</span>
       </button>
@@ -72,16 +77,63 @@ function AddButtons() {
   )
 }
 
-interface BoardProps {
-  boardName: string
+function ContentCard({ item }: { item: Content }) {
+  return (
+    <div className="bg-white/5 border border-white/10 rounded-lg p-3 hover:border-white/20 transition">
+      <div className="text-[13px] text-white/80 font-medium mb-1 truncate">{item.title}</div>
+      <div className="text-[12px] text-white/40 line-clamp-3 whitespace-pre-wrap">{item.content}</div>
+      <div className="mt-2 text-[10px] text-white/30 uppercase">{item.type}</div>
+    </div>
+  )
 }
 
-export default function Board({ boardName }: BoardProps) {
+interface BoardProps {
+  boardId: string
+}
+
+export default function Board({ boardId }: BoardProps) {
+  const [query, setQuery] = useState('')
+  const boards = useBoardStore((s) => s.boards)
+  const contents = useBoardStore((s) => s.contents[boardId] || [])
+  const addContent = useBoardStore((s) => s.addContent)
+
+  const board = boards.find(b => b.id === boardId)
+  const boardName = board?.title || '未命名'
+
+  const filtered = useMemo(() => {
+    if (!query) return contents
+    const q = query.toLowerCase()
+    return contents.filter(c => c.title.toLowerCase().includes(q) || c.content.toLowerCase().includes(q))
+  }, [query, contents])
+
+  const handleAdd = (type: 'note' | 'link' | 'file') => {
+    const id = `${Date.now()}`
+    const title = type === 'note' ? '新笔记' : type === 'link' ? '新链接' : '新文件'
+    const content = type === 'note' ? '在这里写下你的想法…' : type === 'link' ? 'https://example.com' : '文件已添加（示例）'
+    addContent(boardId, {
+      id,
+      boardId,
+      title,
+      content,
+      type: type as any,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    })
+  }
+
   return (
     <div className="flex-1 flex flex-col min-w-0 bg-[#0a0a0a]">
-      <BoardHeader boardName={boardName} />
-      <EmptyState />
-      <AddButtons />
+      <BoardHeader boardName={boardName} onSearch={setQuery} />
+      {filtered.length === 0 ? (
+        <>
+          <EmptyState />
+          <AddButtons onAdd={handleAdd} />
+        </>
+      ) : (
+        <div className="p-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {filtered.map(item => <ContentCard key={item.id} item={item} />)}
+        </div>
+      )}
     </div>
   )
 }

@@ -1,23 +1,14 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Sparkles, Send, Mic, ChevronDown, MoreHorizontal } from 'lucide-react'
+import { useBoardStore, type Message } from '../../lib/store'
 
-interface Message {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  thinking?: string
-  thinkingTime?: number
-}
-
-const mockMessages: Message[] = [
-  {
-    id: '1',
-    role: 'assistant',
-    content: '你好 Leon！我是你的深度研究助手 🎯\n\n很高兴能帮助你进行深度研究！在开始之前，让我先了解一下：\n\n**你想深入研究什么主题呢？**\n\n可以是：\n• 某个领域的最新发展趋势\n• 某个技术/产品的深度分析\n• 行业报告或市场研究\n• 学术课题\n• 商业机会调研\n• 或者任何你感兴趣的领域',
-    thinking: '用户刚刚进入深度研究看板，这是一个全新的研究空间',
-    thinkingTime: 1,
-  },
-]
+// Simple ID generator fallback
+const generateId = () => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return Math.random().toString(36).substring(2, 15);
+};
 
 function ChatMessage({ message }: { message: Message }) {
   const [showThinking, setShowThinking] = useState(false)
@@ -65,7 +56,7 @@ function ChatMessage({ message }: { message: Message }) {
   )
 }
 
-function ChatInput() {
+function ChatInput({ onSend }: { onSend: (text: string) => void }) {
   const [input, setInput] = useState('')
   const [showSkills, setShowSkills] = useState(false)
 
@@ -86,6 +77,15 @@ function ChatInput() {
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                if (input.trim()) {
+                  onSend(input)
+                  setInput('')
+                }
+              }
+            }}
             placeholder="描述任务或输入 / 使用技能"
             className="flex-1 bg-transparent text-[13px] text-white/70 placeholder:text-white/30 resize-none outline-none py-1 min-h-[20px] max-h-[100px] leading-relaxed"
             rows={1}
@@ -104,6 +104,7 @@ function ChatInput() {
             <button
               onClick={() => {
                 if (input.trim()) {
+                  onSend(input)
                   setInput('')
                 }
               }}
@@ -145,7 +146,46 @@ function ChatInput() {
 }
 
 export default function ChatPanel() {
-  const [messages] = useState<Message[]>(mockMessages)
+  const selectedBoardId = useBoardStore((state) => state.selectedBoardId)
+  const messagesMap = useBoardStore((state) => state.messages)
+  const addMessage = useBoardStore((state) => state.addMessage)
+  
+  const messages = selectedBoardId ? (messagesMap[selectedBoardId] || []) : []
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages])
+
+  const handleSendMessage = async (text: string) => {
+    if (!selectedBoardId) return
+
+    // Add user message
+    const userMessage: Message = {
+      id: generateId(),
+      role: 'user',
+      content: text,
+      timestamp: Date.now()
+    }
+    addMessage(selectedBoardId, userMessage)
+
+    // Simulate AI thinking and response
+    setTimeout(() => {
+      const aiMessage: Message = {
+        id: generateId(),
+        role: 'assistant',
+        content: `我收到了关于 "${text}" 的请求。这是基于当前 "${selectedBoardId}" 看板的模拟回复。\n\n在实际系统中，这里将接入真实的 AI 模型，结合看板上下文进行深度回复。`,
+        thinking: '正在分析用户请求并结合当前看板上下文...',
+        thinkingTime: 1.5,
+        timestamp: Date.now()
+      }
+      addMessage(selectedBoardId, aiMessage)
+    }, 1500)
+  }
 
   return (
     <aside className="w-[360px] h-full bg-[#0a0a0a] border-l border-white/5 flex flex-col">
@@ -167,13 +207,21 @@ export default function ChatPanel() {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4">
-        {messages.map((message) => (
-          <ChatMessage key={message.id} message={message} />
-        ))}
+        {messages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-white/30 text-[13px]">
+            <Sparkles size={24} className="mb-2 opacity-50" />
+            <p>开始一个新的对话...</p>
+          </div>
+        ) : (
+          messages.map((message) => (
+            <ChatMessage key={message.id} message={message} />
+          ))
+        )}
+        <div ref={messagesEndRef} />
       </div>
 
       {/* Input */}
-      <ChatInput />
+      <ChatInput onSend={handleSendMessage} />
     </aside>
   )
 }
