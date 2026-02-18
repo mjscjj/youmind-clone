@@ -1,0 +1,37 @@
+#!/bin/bash
+# YouMind Clone 一键推送脚本
+
+echo "=== YouMind Clone 推送到 GitHub ==="
+echo ""
+echo "请按以下步骤操作："
+echo ""
+echo "1. 打开浏览器，访问：https://github.com/new"
+echo ""
+echo "2. 填写仓库信息："
+echo "   - Repository name: youmind-clone"
+echo "   - Description: YouMind Clone - AI Agent Platform (心湃智能克隆版)"
+echo "   - Visibility: Public ✓"
+echo "   - ❌ 不要勾选 'Add a README file'"
+echo "   - ❌ 不要勾选 '.gitignore'"
+echo "   - ❌ 不要勾选 'Choose a license'"
+echo ""
+echo "3. 点击 'Create repository' 按钮"
+echo ""
+echo "4. 复制页面底部显示的推送命令并执行："
+echo ""
+echo "   git remote add origin git@github.com:mjscjj/youmind-clone.git"
+echo "   git branch -M main"
+echo "   git push -u origin main"
+echo ""
+echo "5. 完成！访问 https://github.com/mjscjj/youmind-clone 查看仓库"
+echo ""
+echo "=== 本地项目信息 ==="
+echo "项目位置：/Users/claw/Desktop/.openclaw/.openclaw/workspace-fast/youmind-clone"
+echo "当前分支：main"
+echo "提交历史："
+cd /Users/claw/Desktop/.openclaw/.openclaw/workspace-fast/youmind-clone
+git log --oneline
+echo ""
+echo "=== 已准备的文件 ==="
+git ls-tree -r main --name-only | head -20
+echo ""
