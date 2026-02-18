@@ -1,5 +1,7 @@
-import { Layout, FolderOpen, Lightbulb, User, Settings, Search, Zap, Plus } from 'lucide-react'
+import { Layout, FolderOpen, Lightbulb, User, Settings, Search, Zap, Plus, X } from 'lucide-react'
 import { useBoardStore } from '../../lib/store'
+import { useState, useMemo } from 'react'
+import SearchResults from './SearchResults'
 
 interface SidebarItemProps {
   icon: React.ReactNode
@@ -30,7 +32,16 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ selectedBoard, onSelectBoard }: SidebarProps) {
-  const { boards, isSkillPickerOpen, setSkillPickerOpen } = useBoardStore()
+  const { boards, isSkillPickerOpen, setSkillPickerOpen, contents, searchQuery, setSearchQuery } = useBoardStore()
+  const [isSearchFocused, setIsSearchFocused] = useState(false)
+
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return []
+    return Object.values(contents).flat().filter(content => 
+      content.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      content.content.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+  }, [contents, searchQuery])
 
   return (
     <aside className="w-[240px] h-full bg-[#0a0a0a] border-r border-white/5 flex flex-col">
@@ -56,15 +67,36 @@ export default function Sidebar({ selectedBoard, onSelectBoard }: SidebarProps) 
       </div>
 
       {/* Search */}
-      <div className="px-3 pb-2">
+      <div className="px-3 pb-2 relative z-50">
         <div className="relative group">
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/30 group-focus-within:text-white/50 transition-colors" />
           <input
             type="text"
             placeholder="Search..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onFocus={() => setIsSearchFocused(true)}
+            onBlur={() => setTimeout(() => setIsSearchFocused(false), 200)}
             className="w-full bg-white/5 border border-white/10 rounded-md pl-8 pr-3 py-1.5 text-[13px] text-white/70 placeholder:text-white/30 focus:border-white/20 focus:bg-white/10 focus:outline-none transition-all"
           />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/70"
+            >
+              <X size={12} />
+            </button>
+          )}
         </div>
+        {isSearchFocused && searchQuery && (
+          <SearchResults 
+            results={searchResults} 
+            onSelectResult={(boardId, contentId) => {
+              onSelectBoard(boardId)
+              setSearchQuery('')
+            }} 
+          />
+        )}
       </div>
 
       {/* Skills Section */}

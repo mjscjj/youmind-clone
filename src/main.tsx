@@ -2,6 +2,10 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 
+// Initialize dummy content for search testing
+import { initializeMockContent } from './lib/mockContent'
+initializeMockContent()
+
 // 移除 StrictMode 避免双重渲染问题
 const root = createRoot(document.getElementById('root')!)
 root.render(<App />)
